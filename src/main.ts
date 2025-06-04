@@ -1,22 +1,44 @@
-// main.ts - Entry point for the Phaser game
-console.log(">>> main.ts is running!");
-
-import Phaser from "phaser";           // Import Phaser engine
-import PlayScene from "./scenes/PlayScene"; // Import our custom game scene
+import Phaser from "phaser";
+import PlayScene from "./scenes/PlayScene";
 import { Colors } from "./constants/colors";
 
-// Game configuration object
+/**
+ * Phaser game configuration object
+ */
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,                   // Auto-detect WebGL or Canvas
-  width: 1024,                         // Game width in pixels
-  height: 768,                         // Game height in pixels
-  backgroundColor: Colors.background,  // Use centralized color constant
-  scene: [PlayScene],                  // List of scenes to load
+  // Renderer type: automatically choose WebGL or Canvas
+  type: Phaser.AUTO,
+
+  // Initial width and height of the game canvas, set to browser window size
+  width: window.innerWidth,
+  height: window.innerHeight,
+
+  // Background color of the game canvas, from centralized colors config
+  backgroundColor: Colors.background,
+
+  // Scenes to load in the game; currently only PlayScene
+  scene: [PlayScene],
+
+  // Physics engine configuration (Arcade physics with debug disabled)
   physics: {
-    default: "arcade",                 // Use Arcade Physics (simple physics)
-    arcade: { debug: false }           // Turn off physics debug graphics
+    default: "arcade",
+    arcade: {
+      debug: false
+    }
+  },
+
+  // Scale manager config to handle resizing and centering
+  scale: {
+    mode: Phaser.Scale.RESIZE,          // Automatically resize canvas on window size changes
+    autoCenter: Phaser.Scale.CENTER_BOTH // Center the canvas horizontally and vertically
   }
 };
 
-// Start the game using the config above
-new Phaser.Game(config);
+// Create the Phaser game instance with the above config
+const game = new Phaser.Game(config);
+
+// Optional: Listen for window resize events to handle additional resizing logic
+window.addEventListener('resize', () => {
+  game.scale.resize(window.innerWidth, window.innerHeight);
+});
+

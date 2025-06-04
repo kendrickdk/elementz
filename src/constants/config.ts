@@ -1,16 +1,33 @@
-// config.ts - Central place for grid and font configurations
-
 import { Colors } from "./colors";
 
+/**
+ * GridConfig holds all settings related to the grid layout and appearance.
+ */
 export const GridConfig = {
-  size: 32,    // Size of each grid cell in pixels
-  cols: 12,    // Number of columns in the grid
-  rows: 10     // Number of rows in the grid
+  size: 32,          // Size of each grid cell in pixels
+  cols: 12,          // Number of columns in the grid
+  rows: 10,          // Number of rows in the grid
+  
+
+  /**
+   * cornerRadius defines how rounded the grid cell corners are.
+   * - 0 means sharp corners (square cells)
+   * - Maximum recommended is half of the grid size (which makes cells circular)
+   */
+  cornerRadius: 20,
+  showGrid: true,   // Toggle to show/hide the grid
 };
 
-// Font styles used throughout the game for consistency and easy tweaking
+export const ChunkConfig = {
+  cols: 32,   // Number of columns in one chunk
+  rows: 32    // Number of rows in one chunk
+};
+
+/**
+ * FontStyles centralizes font and color settings for text elements.
+ */
 export const FontStyles = {
   label: { font: "24px Arial", color: Colors.textPrimary, fontStyle: "bold" },  // General labels
-  protonLabel: { font: "24px Arial", color: Colors.textOnProton }               // Labels for proton nodes
+  protonLabel: { font: "24px Arial", color: Colors.textOnProton }               // Labels on proton nodes
 };
 
