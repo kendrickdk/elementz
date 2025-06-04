@@ -1,142 +1,179 @@
 import Phaser from "phaser";
-import ChunkManager from "../chunks/ChunkManager";
-import { InputConfig } from "../constants/inputConfig";
-// Import config values (without Colors)
-import { MovementConfig, GridConfig, ChunkConfig } from "../constants/config";
-// Import Colors separately from colors.ts
-import { Colors } from "../constants/colors";
-import { hexToNumber } from "../utils/colorUtils";
+import { InputKeys } from "../constants/inputConfig";
+import { GridConfig, CameraConfig } from "../constants/config";
 
-export default class PlayScene extends Phaser.Scene {
-  private chunkManager!: ChunkManager;
-  private keys: Phaser.Input.Keyboard.Key[] = [];
-  private velocityX: number = 0;
-  private velocityY: number = 0;
-  private acceleration = MovementConfig.acceleration;
-  private maxSpeed = MovementConfig.maxSpeed;
-  private drag = MovementConfig.drag;
-
-  private centerBlockStartCol: number = 0;
-  private centerBlockStartRow: number = 0;
-  private centerBlockCols: number = 4;
-  private centerBlockRows: number = 4;
-
-  create() {
-    this.cameras.main.setScroll(0, 0);
-    this.cameras.main.setZoom(1);
-
-    const totalCols = ChunkConfig.cols * 3; 
-    const totalRows = ChunkConfig.rows * 3;
-
-    this.centerBlockStartCol = Math.floor(totalCols / 2) - Math.floor(this.centerBlockCols / 2);
-    this.centerBlockStartRow = Math.floor(totalRows / 2) - Math.floor(this.centerBlockRows / 2);
-
-    this.chunkManager = new ChunkManager(this, 1);
-
-    this.chunkManager.update(this.cameras.main, {
-      startCol: this.centerBlockStartCol,
-      startRow: this.centerBlockStartRow,
-      cols: this.centerBlockCols,
-      rows: this.centerBlockRows,
-    });
-
-    this.drawCenterBlock();
-
-    const keyCodes = [
-      ...InputConfig.upKeys,
-      ...InputConfig.downKeys,
-      ...InputConfig.leftKeys,
-      ...InputConfig.rightKeys,
-    ];
-    this.keys = keyCodes.map((code) => this.input.keyboard.addKey(code));
-  }
-
-  update(time: number, delta: number) {
-    const deltaSeconds = delta / 1000;
-    const cam = this.cameras.main;
-
-    let inputX = 0;
-    let inputY = 0;
-    if (this.isAnyKeyDown(InputConfig.leftKeys)) inputX -= 1;
-    if (this.isAnyKeyDown(InputConfig.rightKeys)) inputX += 1;
-    if (this.isAnyKeyDown(InputConfig.upKeys)) inputY -= 1;
-    if (this.isAnyKeyDown(InputConfig.downKeys)) inputY += 1;
-
-    if (inputX !== 0) {
-      this.velocityX += inputX * this.acceleration * deltaSeconds;
-      this.velocityX = Phaser.Math.Clamp(this.velocityX, -this.maxSpeed, this.maxSpeed);
-    } else {
-      this.velocityX = this.applyDrag(this.velocityX, this.drag, deltaSeconds);
-    }
-
-    if (inputY !== 0) {
-      this.velocityY += inputY * this.acceleration * deltaSeconds;
-      this.velocityY = Phaser.Math.Clamp(this.velocityY, -this.maxSpeed, this.maxSpeed);
-    } else {
-      this.velocityY = this.applyDrag(this.velocityY, this.drag, deltaSeconds);
-    }
-
-    cam.scrollX += this.velocityX * deltaSeconds;
-    cam.scrollY += this.velocityY * deltaSeconds;
-
-    this.chunkManager.update(cam, {
-      startCol: this.centerBlockStartCol,
-      startRow: this.centerBlockStartRow,
-      cols: this.centerBlockCols,
-      rows: this.centerBlockRows,
-    });
-  }
-
-  private drawCenterBlock() {
-    const gridSize = GridConfig.size;
-    const centerBlockWidth = this.centerBlockCols * gridSize;
-    const centerBlockHeight = this.centerBlockRows * gridSize;
-    const cornerRadius = Math.min(GridConfig.cornerRadius, gridSize / 2);
-
-    const centerX = (this.centerBlockStartCol + this.centerBlockCols / 2) * gridSize;
-    const centerY = (this.centerBlockStartRow + this.centerBlockRows / 2) * gridSize;
-
-    const graphics = this.add.graphics();
-
-    const fillColor = hexToNumber(Colors.centerBlockFillColor);
-    const fillAlpha = Colors.centerBlockFillAlpha;
-    graphics.fillStyle(fillColor, fillAlpha);
-    graphics.fillRoundedRect(
-      centerX - centerBlockWidth / 2,
-      centerY - centerBlockHeight / 2,
-      centerBlockWidth,
-      centerBlockHeight,
-      cornerRadius
-    );
-
-    const strokeColor = hexToNumber(Colors.centerBlockStrokeColor);
-    graphics.lineStyle(4, strokeColor);
-    graphics.strokeRoundedRect(
-      centerX - centerBlockWidth / 2,
-      centerY - centerBlockHeight / 2,
-      centerBlockWidth,
-      centerBlockHeight,
-      cornerRadius
-    );
-  }
-
-  private applyDrag(velocity: number, drag: number, delta: number): number {
-    if (velocity > 0) {
-      velocity -= drag * delta;
-      if (velocity < 0) velocity = 0;
-    } else if (velocity < 0) {
-      velocity += drag * delta;
-      if (velocity > 0) velocity = 0;
-    }
-    return velocity;
-  }
-
-  private isAnyKeyDown(keys: number[]): boolean {
-    return keys.some((code) => {
-      const key = this.keys.find((k) => k.keyCode === code);
-      return key?.isDown ?? false;
-    });
-  }
+/**
+ * Utility function to get the Phaser key code from a single character.
+ * Keeps input mapping flexible by only dealing with letters in config.
+ */
+function getKeyCode(key: string) {
+  return Phaser.Input.Keyboard.KeyCodes[key.toUpperCase()];
 }
 
+export default class PlayScene extends Phaser.Scene {
+  // Graphics object for grid lines
+  private gridGraphics!: Phaser.GameObjects.Graphics;
 
+  // Graphics object for the central hub (center square)
+  private centerSquare!: Phaser.GameObjects.Graphics;
+
+  // Holds references to movement keys (custom + arrows)
+  private keys!: { [key: string]: Phaser.Input.Keyboard.Key };
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+
+  // Cache settings for easier reference (values come from config)
+  private gridSize = GridConfig.cellSize;
+  private centerHubCells = GridConfig.centerHubCells;
+  private centerHubRadius = GridConfig.centerHubRadius;
+  private cameraSpeed = CameraConfig.moveSpeed;
+
+  // Dynamic getters for hub boundaries, always centered at (0,0)
+  private get centerLeft() { return -this.centerHubCells / 2; }
+  private get centerRight() { return this.centerHubCells / 2; }
+  private get centerTop() { return -this.centerHubCells / 2; }
+  private get centerBottom() { return this.centerHubCells / 2; }
+
+  /**
+   * Called when the scene is created.
+   * Sets up camera, grid, input, and draws the initial grid and hub.
+   */
+  create() {
+    // Center the camera at (0,0) for symmetric infinite scrolling
+    this.cameras.main.centerOn(0, 0);
+
+    // Create persistent graphics objects (don't recreate in update)
+    this.gridGraphics = this.add.graphics();
+    this.centerSquare = this.add.graphics();
+
+    // Create movement key listeners from input config and add arrow key fallback
+    this.keys = this.input.keyboard.addKeys({
+      up: getKeyCode(InputKeys.up),
+      down: getKeyCode(InputKeys.down),
+      left: getKeyCode(InputKeys.left),
+      right: getKeyCode(InputKeys.right),
+    }) as any;
+    this.cursors = this.input.keyboard.createCursorKeys();
+
+    // Draw the grid and the center hub on startup
+    this.drawVisibleGrid();
+    this.drawCenterSquare();
+  }
+
+  /**
+   * Called every frame.
+   * Handles camera movement and grid redraws.
+   */
+  update() {
+    const cam = this.cameras.main;
+    let moved = false;
+
+    // Move camera based on key presses (custom or arrow keys)
+    if (this.keys.up.isDown || this.cursors.up.isDown) {
+      cam.scrollY -= this.cameraSpeed; // Scroll camera up
+      moved = true;
+    }
+    if (this.keys.down.isDown || this.cursors.down.isDown) {
+      cam.scrollY += this.cameraSpeed; // Scroll camera down
+      moved = true;
+    }
+    if (this.keys.left.isDown || this.cursors.left.isDown) {
+      cam.scrollX -= this.cameraSpeed; // Scroll camera left
+      moved = true;
+    }
+    if (this.keys.right.isDown || this.cursors.right.isDown) {
+      cam.scrollX += this.cameraSpeed; // Scroll camera right
+      moved = true;
+    }
+
+    // Only redraw grid if camera moved (for best performance)
+    if (moved) {
+      this.drawVisibleGrid();
+    }
+  }
+
+  /**
+   * Draws the visible grid based on current camera position.
+   * Grid lines are skipped inside the central hub area for visual clarity.
+   */
+  private drawVisibleGrid() {
+    this.gridGraphics.clear();
+
+    // If grid is disabled in config, don't draw anything
+    if (!GridConfig.showGrid) return;
+
+    // Set grid line style based on config
+    this.gridGraphics.lineStyle(
+      GridConfig.gridLineThickness,
+      GridConfig.gridLineColor,
+      0.5 // Alpha (opacity)
+    );
+
+    const cam = this.cameras.main;
+
+    // Calculate which grid lines are visible on the screen (plus a margin)
+    const left = Math.floor(cam.scrollX / this.gridSize) - 1;
+    const right = Math.ceil((cam.scrollX + cam.width) / this.gridSize) + 1;
+    const top = Math.floor(cam.scrollY / this.gridSize) - 1;
+    const bottom = Math.ceil((cam.scrollY + cam.height) / this.gridSize) + 1;
+
+    // Draw vertical lines, skipping those inside the hub region
+    for (let x = left; x <= right; x++) {
+      if (x >= this.centerLeft && x < this.centerRight) continue; // Skip hub area
+      const px = x * this.gridSize;
+      this.gridGraphics.moveTo(px, top * this.gridSize);
+      this.gridGraphics.lineTo(px, bottom * this.gridSize);
+    }
+
+    // Draw horizontal lines, skipping those inside the hub region
+    for (let y = top; y <= bottom; y++) {
+      if (y >= this.centerTop && y < this.centerBottom) continue; // Skip hub area
+      const py = y * this.gridSize;
+      this.gridGraphics.moveTo(left * this.gridSize, py);
+      this.gridGraphics.lineTo(right * this.gridSize, py);
+    }
+
+    this.gridGraphics.strokePath();
+  }
+
+  /**
+   * Draws the central hub as a rounded rectangle, always centered at (0,0).
+   * Appearance (size, color, border, fill) is fully controlled via config/colors.
+   */
+  private drawCenterSquare() {
+    this.centerSquare.clear();
+
+    // Compute the top-left corner so the rectangle is centered
+    const half = this.centerHubCells / 2;
+    const originX = -half * this.gridSize;
+    const originY = -half * this.gridSize;
+    const width = this.centerHubCells * this.gridSize;
+    const height = this.centerHubCells * this.gridSize;
+
+    // Draw the border (thickness, color from config)
+    this.centerSquare.lineStyle(
+      GridConfig.centerHubBorder,
+      GridConfig.centerHubColor,
+      1 // Border is fully opaque
+    );
+    this.centerSquare.strokeRoundedRect(
+      originX,
+      originY,
+      width,
+      height,
+      this.centerHubRadius
+    );
+
+    // Draw the transparent fill (color/opacity from config)
+    this.centerSquare.fillStyle(
+      GridConfig.centerHubColor,
+      GridConfig.centerHubFillAlpha
+    );
+    this.centerSquare.fillRoundedRect(
+      originX,
+      originY,
+      width,
+      height,
+      this.centerHubRadius
+    );
+  }
+}

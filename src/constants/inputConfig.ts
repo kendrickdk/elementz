@@ -1,12 +1,23 @@
-import Phaser from "phaser";
+// src/constants/inputConfig.ts
 
 /**
- * InputConfig centralizes all key bindings for player controls.
- * Each action supports multiple key codes (e.g., W and Up Arrow for up).
+ * Centralized key mapping for movement and controls.
+ * Change these values to customize your controls for the whole game.
+ * 
+ * - 'up', 'down', 'left', 'right' correspond to camera/grid movement.
+ * - Use single characters: e.g., 'E', 'D', 'S', 'F', 'W', 'A', etc.
+ * - This makes it easy to remap keys without digging into scene/game code.
  */
-export const InputConfig = {
-  upKeys: [Phaser.Input.Keyboard.KeyCodes.E, Phaser.Input.Keyboard.KeyCodes.UP],
-  downKeys: [Phaser.Input.Keyboard.KeyCodes.D, Phaser.Input.Keyboard.KeyCodes.DOWN],
-  leftKeys: [Phaser.Input.Keyboard.KeyCodes.S, Phaser.Input.Keyboard.KeyCodes.LEFT],
-  rightKeys: [Phaser.Input.Keyboard.KeyCodes.F, Phaser.Input.Keyboard.KeyCodes.RIGHT],
+
+export const InputKeys = {
+  up: 'E',     // Move up (camera or player)
+  down: 'D',   // Move down
+  left: 'S',   // Move left
+  right: 'F',  // Move right
+
+  // Example: add more controls below
+  // zoomIn: '+',
+  // zoomOut: '-',
+  // action: 'SPACE'
 };
+
