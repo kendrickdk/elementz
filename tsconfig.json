@@ -1,0 +1,13 @@
+{
+  // TypeScript configuration for compiling .ts files to JavaScript
+  "compilerOptions": {
+    "target": "esnext",                // Modern JS features
+    "module": "esnext",                // Use modern module system
+    "strict": true,                    // Strict type-checking for fewer bugs
+    "esModuleInterop": true,           // Import/export compatibility
+    "moduleResolution": "node",        // Node-style imports
+    "forceConsistentCasingInFileNames": true, // Catch case typos
+    "outDir": "dist"                   // Where to put compiled code
+  },
+  "include": ["src"]                   // Only look in the src folder for code
+}
