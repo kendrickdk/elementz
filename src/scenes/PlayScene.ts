@@ -1,73 +1,142 @@
 import Phaser from "phaser";
-import Chunk from "../chunks/Chunk";
+import ChunkManager from "../chunks/ChunkManager";
+import { InputConfig } from "../constants/inputConfig";
+// Import config values (without Colors)
+import { MovementConfig, GridConfig, ChunkConfig } from "../constants/config";
+// Import Colors separately from colors.ts
+import { Colors } from "../constants/colors";
+import { hexToNumber } from "../utils/colorUtils";
 
 export default class PlayScene extends Phaser.Scene {
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;   // Arrow keys input
-  private wasdKeys!: { [key: string]: Phaser.Input.Keyboard.Key }; // WASD keys input
-  private cameraSpeed: number = 300;  // Camera movement speed in pixels per second
+  private chunkManager!: ChunkManager;
+  private keys: Phaser.Input.Keyboard.Key[] = [];
+  private velocityX: number = 0;
+  private velocityY: number = 0;
+  private acceleration = MovementConfig.acceleration;
+  private maxSpeed = MovementConfig.maxSpeed;
+  private drag = MovementConfig.drag;
 
-  constructor() {
-    super("PlayScene");
-  }
+  private centerBlockStartCol: number = 0;
+  private centerBlockStartRow: number = 0;
+  private centerBlockCols: number = 4;
+  private centerBlockRows: number = 4;
 
   create() {
-    // Create the origin chunk at chunk coordinates (0, 0)
-    new Chunk(this, 0, 0);
+    this.cameras.main.setScroll(0, 0);
+    this.cameras.main.setZoom(1);
 
-    // Initialize cursor keys (arrow keys) for input
-    this.cursors = this.input.keyboard.createCursorKeys();
+    const totalCols = ChunkConfig.cols * 3; 
+    const totalRows = ChunkConfig.rows * 3;
 
-    // Initialize WASD keys for input
-    this.wasdKeys = {
-      W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
+    this.centerBlockStartCol = Math.floor(totalCols / 2) - Math.floor(this.centerBlockCols / 2);
+    this.centerBlockStartRow = Math.floor(totalRows / 2) - Math.floor(this.centerBlockRows / 2);
+
+    this.chunkManager = new ChunkManager(this, 1);
+
+    this.chunkManager.update(this.cameras.main, {
+      startCol: this.centerBlockStartCol,
+      startRow: this.centerBlockStartRow,
+      cols: this.centerBlockCols,
+      rows: this.centerBlockRows,
+    });
+
+    this.drawCenterBlock();
+
+    const keyCodes = [
+      ...InputConfig.upKeys,
+      ...InputConfig.downKeys,
+      ...InputConfig.leftKeys,
+      ...InputConfig.rightKeys,
+    ];
+    this.keys = keyCodes.map((code) => this.input.keyboard.addKey(code));
   }
 
   update(time: number, delta: number) {
-    // delta is the time elapsed since last frame in milliseconds
-    // Convert it to seconds for frame-rate independent movement
     const deltaSeconds = delta / 1000;
+    const cam = this.cameras.main;
 
-    // Get the main camera object
-    let cam = this.cameras.main;
+    let inputX = 0;
+    let inputY = 0;
+    if (this.isAnyKeyDown(InputConfig.leftKeys)) inputX -= 1;
+    if (this.isAnyKeyDown(InputConfig.rightKeys)) inputX += 1;
+    if (this.isAnyKeyDown(InputConfig.upKeys)) inputY -= 1;
+    if (this.isAnyKeyDown(InputConfig.downKeys)) inputY += 1;
 
-    // Calculate movement amount based on speed and frame time
-    let speed = this.cameraSpeed * deltaSeconds;
-
-    // Move camera left if left arrow key is pressed
-    if (this.cursors.left?.isDown) {
-      cam.scrollX -= speed;
-    }
-    // Move camera right if right arrow key is pressed
-    if (this.cursors.right?.isDown) {
-      cam.scrollX += speed;
-    }
-    // Move camera up if up arrow key is pressed
-    if (this.cursors.up?.isDown) {
-      cam.scrollY -= speed;
-    }
-    // Move camera down if down arrow key is pressed
-    if (this.cursors.down?.isDown) {
-      cam.scrollY += speed;
+    if (inputX !== 0) {
+      this.velocityX += inputX * this.acceleration * deltaSeconds;
+      this.velocityX = Phaser.Math.Clamp(this.velocityX, -this.maxSpeed, this.maxSpeed);
+    } else {
+      this.velocityX = this.applyDrag(this.velocityX, this.drag, deltaSeconds);
     }
 
-    // Also support WASD keys for movement:
+    if (inputY !== 0) {
+      this.velocityY += inputY * this.acceleration * deltaSeconds;
+      this.velocityY = Phaser.Math.Clamp(this.velocityY, -this.maxSpeed, this.maxSpeed);
+    } else {
+      this.velocityY = this.applyDrag(this.velocityY, this.drag, deltaSeconds);
+    }
 
-    if (this.wasdKeys.A.isDown) {
-      cam.scrollX -= speed;
+    cam.scrollX += this.velocityX * deltaSeconds;
+    cam.scrollY += this.velocityY * deltaSeconds;
+
+    this.chunkManager.update(cam, {
+      startCol: this.centerBlockStartCol,
+      startRow: this.centerBlockStartRow,
+      cols: this.centerBlockCols,
+      rows: this.centerBlockRows,
+    });
+  }
+
+  private drawCenterBlock() {
+    const gridSize = GridConfig.size;
+    const centerBlockWidth = this.centerBlockCols * gridSize;
+    const centerBlockHeight = this.centerBlockRows * gridSize;
+    const cornerRadius = Math.min(GridConfig.cornerRadius, gridSize / 2);
+
+    const centerX = (this.centerBlockStartCol + this.centerBlockCols / 2) * gridSize;
+    const centerY = (this.centerBlockStartRow + this.centerBlockRows / 2) * gridSize;
+
+    const graphics = this.add.graphics();
+
+    const fillColor = hexToNumber(Colors.centerBlockFillColor);
+    const fillAlpha = Colors.centerBlockFillAlpha;
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.fillRoundedRect(
+      centerX - centerBlockWidth / 2,
+      centerY - centerBlockHeight / 2,
+      centerBlockWidth,
+      centerBlockHeight,
+      cornerRadius
+    );
+
+    const strokeColor = hexToNumber(Colors.centerBlockStrokeColor);
+    graphics.lineStyle(4, strokeColor);
+    graphics.strokeRoundedRect(
+      centerX - centerBlockWidth / 2,
+      centerY - centerBlockHeight / 2,
+      centerBlockWidth,
+      centerBlockHeight,
+      cornerRadius
+    );
+  }
+
+  private applyDrag(velocity: number, drag: number, delta: number): number {
+    if (velocity > 0) {
+      velocity -= drag * delta;
+      if (velocity < 0) velocity = 0;
+    } else if (velocity < 0) {
+      velocity += drag * delta;
+      if (velocity > 0) velocity = 0;
     }
-    if (this.wasdKeys.D.isDown) {
-      cam.scrollX += speed;
-    }
-    if (this.wasdKeys.W.isDown) {
-      cam.scrollY -= speed;
-    }
-    if (this.wasdKeys.S.isDown) {
-      cam.scrollY += speed;
-    }
+    return velocity;
+  }
+
+  private isAnyKeyDown(keys: number[]): boolean {
+    return keys.some((code) => {
+      const key = this.keys.find((k) => k.keyCode === code);
+      return key?.isDown ?? false;
+    });
   }
 }
+
 

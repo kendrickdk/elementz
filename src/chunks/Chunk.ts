@@ -1,56 +1,78 @@
-// Chunk.ts - Represents a single chunk of the grid (32x32 cells)
-
 import Phaser from "phaser";
 import { hexToNumber } from "../utils/colorUtils";
 import { Colors } from "../constants/colors";
 import { GridConfig, ChunkConfig } from "../constants/config";
 
+interface CenterBlockInfo {
+  startCol: number;
+  startRow: number;
+  cols: number;
+  rows: number;
+}
+
+/**
+ * Chunk draws grid cells for a chunk and skips cells inside the global center block.
+ */
 export default class Chunk {
   scene: Phaser.Scene;
-  col: number;  // Chunk column index in the world grid
-  row: number;  // Chunk row index in the world grid
-  container: Phaser.GameObjects.Container; // Container holding all display objects for this chunk
-  graphics: Phaser.GameObjects.Graphics;   // Graphics object used to draw the grid cells
-  gridSize: number;                        // Size of each grid cell in pixels
+  col: number;
+  row: number;
+  container: Phaser.GameObjects.Container;
+  graphics: Phaser.GameObjects.Graphics;
+  gridSize: number;
+  centerBlockInfo?: CenterBlockInfo;
 
-  constructor(scene: Phaser.Scene, col: number, row: number) {
+  constructor(scene: Phaser.Scene, col: number, row: number, centerBlockInfo?: CenterBlockInfo) {
     this.scene = scene;
     this.col = col;
     this.row = row;
     this.gridSize = GridConfig.size;
+    this.centerBlockInfo = centerBlockInfo;
 
-    // Position the container according to chunk coordinates
     this.container = this.scene.add.container(
       this.col * this.gridSize * ChunkConfig.cols,
       this.row * this.gridSize * ChunkConfig.rows
     );
 
-    // Create a Graphics object inside the container to draw the grid and center block
+    console.log(`Chunk created at col: ${col}, row: ${row}, container position: x=${this.container.x}, y=${this.container.y}`);
+
     this.graphics = this.scene.add.graphics();
     this.container.add(this.graphics);
 
-    // Draw the grid cells and center block
     this.drawGrid();
   }
 
   drawGrid() {
-    // Determine the corner radius for rounded corners once
     const cornerRadius = Math.min(GridConfig.cornerRadius, this.gridSize / 2);
-
-    // Clear previous drawings before drawing anew
     this.graphics.clear();
 
-    // Draw grid only if enabled in config
     if (GridConfig.showGrid) {
-      // Convert the grid line color hex string to a number Phaser can use
       const gridLineColorNum = hexToNumber(Colors.gridLines);
-
-      // Set the line style for grid cell borders (width and color)
       this.graphics.lineStyle(1, gridLineColorNum);
 
-      // Draw each grid cell as rounded rectangles
+      // Destructure center block info or set default to skip nothing
+      const {
+        startCol = Number.MIN_SAFE_INTEGER,
+        startRow = Number.MIN_SAFE_INTEGER,
+        cols: centerCols = 0,
+        rows: centerRows = 0,
+      } = this.centerBlockInfo ?? {};
+
       for (let y = 0; y < ChunkConfig.rows; y++) {
         for (let x = 0; x < ChunkConfig.cols; x++) {
+          const globalX = this.col * ChunkConfig.cols + x;
+          const globalY = this.row * ChunkConfig.rows + y;
+
+          // Skip grid cells inside the global center block
+          if (
+            globalX >= startCol &&
+            globalX < startCol + centerCols &&
+            globalY >= startRow &&
+            globalY < startRow + centerRows
+          ) {
+            continue; // skip drawing this cell
+          }
+
           const px = x * this.gridSize;
           const py = y * this.gridSize;
 
@@ -58,33 +80,5 @@ export default class Chunk {
         }
       }
     }
-
-    // Calculate top-left cell of the 4x4 center block
-    const centerCol = Math.floor(ChunkConfig.cols / 2) - 2; // half of 4
-    const centerRow = Math.floor(ChunkConfig.rows / 2) - 2;
-
-    // Calculate pixel position and size of the center block
-    const blockX = centerCol * this.gridSize;
-    const blockY = centerRow * this.gridSize;
-    const blockWidth = 4 * this.gridSize;
-    const blockHeight = 4 * this.gridSize;
-
-    // Convert center block fill color from hex to number
-    const fillColorNum = hexToNumber(Colors.centerBlockFillColor);
-    // Get fill alpha (opacity) from config
-    const fillAlpha = Colors.centerBlockFillAlpha;
-    // Convert center block stroke color from hex to number
-    const strokeColorNum = hexToNumber(Colors.centerBlockStrokeColor);
-
-    // Draw the filled rounded rectangle for the center block with opacity
-    this.graphics.fillStyle(fillColorNum, fillAlpha);
-    this.graphics.fillRoundedRect(blockX, blockY, blockWidth, blockHeight, cornerRadius);
-
-    // Draw the stroke around the center block
-    this.graphics.lineStyle(4, strokeColorNum);   // Stroke width and color
-    this.graphics.strokeRoundedRect(blockX, blockY, blockWidth, blockHeight, cornerRadius);
   }
 }
-
-
-

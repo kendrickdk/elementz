@@ -8,7 +8,6 @@ export const GridConfig = {
   cols: 12,          // Number of columns in the grid
   rows: 10,          // Number of rows in the grid
   
-
   /**
    * cornerRadius defines how rounded the grid cell corners are.
    * - 0 means sharp corners (square cells)
@@ -19,8 +18,8 @@ export const GridConfig = {
 };
 
 export const ChunkConfig = {
-  cols: 32,   // Number of columns in one chunk
-  rows: 32    // Number of rows in one chunk
+  cols: 16,   // Number of columns in one chunk
+  rows: 16    // Number of rows in one chunk
 };
 
 /**
@@ -29,5 +28,14 @@ export const ChunkConfig = {
 export const FontStyles = {
   label: { font: "24px Arial", color: Colors.textPrimary, fontStyle: "bold" },  // General labels
   protonLabel: { font: "24px Arial", color: Colors.textOnProton }               // Labels on proton nodes
+};
+
+/**
+ * MovementConfig centralizes camera movement parameters.
+ */
+export const MovementConfig = {
+  acceleration: 2400,  // pixels per second squared
+  maxSpeed: 1200,       // max speed in pixels per second
+  drag: 2000           // deceleration in pixels per second squared
 };
 
