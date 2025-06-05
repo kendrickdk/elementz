@@ -10,7 +10,7 @@ export function drawSplitter(
   x: number,
   y: number,
   size: number,
-  options?: { color?: number }
+  options?: { color?: number; highlight?: boolean }
 ) {
   const c = options?.color || 0xcccccc;
   // Main body
