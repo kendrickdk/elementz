@@ -14,10 +14,7 @@ export const InputKeys = {
   down: 'D',   // Move down
   left: 'S',   // Move left
   right: 'F',  // Move right
-
-  // Example: add more controls below
-  // zoomIn: '+',
-  // zoomOut: '-',
-  // action: 'SPACE'
+  accelerate: "A",  // Accelerate
+  recenter: 'HOME', // Re-enter the game 
 };
 
