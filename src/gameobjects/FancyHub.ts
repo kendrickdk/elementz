@@ -35,7 +35,7 @@ export function drawFancyHub(
   graphics.fillCircle(x, y, centerRadius);
 
   // Draw colored border for hub
-  graphics.lineStyle(GridConfig.centerHubBorder, "#172bc5", 0.7); // Border color and opacity
+  graphics.lineStyle(GridConfig.centerHubBorder, 0x172bc5, 0.7); // Border color and opacity
   graphics.strokeCircle(x, y, centerRadius);
 
 }
