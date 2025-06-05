@@ -1,9 +1,7 @@
 import Phaser from "phaser";
 import { InputKeys } from "../constants/inputConfig";
-import { GridConfig, CameraConfig } from "../constants/config";
-import { drawFancyHub } from "../gameobjects/FancyHub"; // Updated import path
-import { ZoomConfig } from "../constants/config"; // Import your zoom settings
-
+import { GridConfig, CameraConfig, ZoomConfig } from "../constants/config";
+import { drawFancyHub } from "../gameobjects/FancyHub";
 
 /**
  * Utility function to get the Phaser key code from a single character.
@@ -54,12 +52,12 @@ export default class PlayScene extends Phaser.Scene {
     // Draw the grid and the center hub on startup
     this.drawVisibleGrid();
     this.drawCenterSquare();
-    
+
     // Add mouse wheel zoom support using settings from config
     this.input.on("wheel", (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
       let camera = this.cameras.main;
 
-      // Default to current zoom
+      // Start with the current zoom
       let newZoom = camera.zoom;
 
       // Mouse wheel up = zoom in, down = zoom out
@@ -79,9 +77,9 @@ export default class PlayScene extends Phaser.Scene {
         );
       }
       camera.setZoom(newZoom); // Apply the new zoom value
+
+      this.drawVisibleGrid(); // Redraw grid to cover new visible area
     });
-
-
   }
 
   /**
@@ -120,14 +118,15 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * Draws the visible grid based on current camera position.
-   * The grid covers the entire visible area, even under the hub or buildings.
+   * Draws the visible grid based on current camera position and zoom.
+   * This version "overdraws" by an extra viewport in all directions
+   * so you never see the grid run out, even at max zoom out or extreme panning.
    */
   private drawVisibleGrid() {
     this.gridGraphics.clear();
     if (!GridConfig.showGrid) return;
 
-    // Draw the grid with a subtle alpha (opacity) for that classic Shapez look.
+    // Set grid line style
     this.gridGraphics.lineStyle(
       GridConfig.gridLineThickness,
       GridConfig.gridLineColor,
@@ -135,19 +134,31 @@ export default class PlayScene extends Phaser.Scene {
     );
 
     const cam = this.cameras.main;
-    const left = Math.floor(cam.scrollX / this.gridSize) - 1;
-    const right = Math.ceil((cam.scrollX + cam.width) / this.gridSize) + 1;
-    const top = Math.floor(cam.scrollY / this.gridSize) - 1;
-    const bottom = Math.ceil((cam.scrollY + cam.height) / this.gridSize) + 1;
+    const zoom = cam.zoom;
 
-    // Draw vertical grid lines across the visible area.
+    // Get visible area in world coordinates (top-left, bottom-right)
+    const viewLeft = cam.scrollX;
+    const viewRight = cam.scrollX + cam.width / zoom;
+    const viewTop = cam.scrollY;
+    const viewBottom = cam.scrollY + cam.height / zoom;
+
+    // "Overdraw" by a full viewport in each direction (bufferCells)
+    const bufferCellsX = Math.ceil(cam.width / (zoom * this.gridSize));
+    const bufferCellsY = Math.ceil(cam.height / (zoom * this.gridSize));
+
+    const left = Math.floor(viewLeft / this.gridSize) - bufferCellsX;
+    const right = Math.ceil(viewRight / this.gridSize) + bufferCellsX;
+    const top = Math.floor(viewTop / this.gridSize) - bufferCellsY;
+    const bottom = Math.ceil(viewBottom / this.gridSize) + bufferCellsY;
+
+    // Draw vertical grid lines
     for (let x = left; x <= right; x++) {
       const px = x * this.gridSize;
       this.gridGraphics.moveTo(px, top * this.gridSize);
       this.gridGraphics.lineTo(px, bottom * this.gridSize);
     }
 
-    // Draw horizontal grid lines across the visible area.
+    // Draw horizontal grid lines
     for (let y = top; y <= bottom; y++) {
       const py = y * this.gridSize;
       this.gridGraphics.moveTo(left * this.gridSize, py);
@@ -160,12 +171,9 @@ export default class PlayScene extends Phaser.Scene {
   /**
    * Draws the central hub using the reusable drawFancyHub function.
    * The hub is always centered at (0, 0).
-   * This approach keeps PlayScene clean and allows you to easily update the hub visuals.
    */
   private drawCenterSquare() {
     this.centerSquare.clear();
-    // Pass the Phaser Graphics, center position, and current time for animation
     drawFancyHub(this.centerSquare, 0, 0, this.time.now);
   }
 }
-
