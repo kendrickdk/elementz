@@ -6,39 +6,40 @@ import { Splitter } from "../entities/Splitter";
 import { getKeyCode } from "../utils/getKeyCode";
 
 /**
- * PlayScene handles the main gameplay area: grid rendering, camera movement,
- * hub drawing, and managing Splitter entities.
+ * PlayScene:
+ * - Handles grid, camera movement, tool placement, and communication with UIScene (for tool selection).
  */
 export default class PlayScene extends Phaser.Scene {
-  // Graphics objects for grid and game elements
-  private gridGraphics!: Phaser.GameObjects.Graphics;    // Used for drawing grid lines
-  private centerSquare!: Phaser.GameObjects.Graphics;    // Used for hub and splitters
+  // Graphics for grid and hub
+  private gridGraphics!: Phaser.GameObjects.Graphics;
+  private centerSquare!: Phaser.GameObjects.Graphics;
 
-  // List of all splitter entities in the scene
+  // Array to hold all placed Splitters
   private splitters: Splitter[] = [];
 
-  // Key bindings for movement, acceleration, and re-centering
+  // Keyboard input
   private keys!: { [key: string]: Phaser.Input.Keyboard.Key };
-  // Built-in Phaser arrow key controls
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
-  // Grid and camera config (cell size, speed)
+  // Grid and camera config
   private gridSize = GridConfig.cellSize;
   private cameraSpeed = CameraConfig.moveSpeed;
 
+  // Which tool is selected (from the UIScene menu)
+  private currentTool: string = "qtub"; // Default
+
   /**
-   * Phaser scene initialization.
-   * Sets up camera, input, grid, and mouse controls.
+   * Phaser scene setup: runs when the scene starts.
    */
   create() {
-    // Center the camera on the hub at the start
+    // Center camera on the hub at start
     this.cameras.main.centerOn(0, 0);
 
-    // Create graphics layers for grid and hub/splitters
+    // Add graphics layers for grid and hub/splitters
     this.gridGraphics = this.add.graphics();
     this.centerSquare = this.add.graphics();
 
-    // Set up custom movement keys (from InputKeys) and Phaser's built-in cursor keys
+    // Setup keyboard controls (custom keys and arrows)
     this.keys = this.input.keyboard!.addKeys({
       up: getKeyCode(InputKeys.up),
       down: getKeyCode(InputKeys.down),
@@ -49,71 +50,81 @@ export default class PlayScene extends Phaser.Scene {
     }) as any;
     this.cursors = this.input.keyboard!.createCursorKeys();
 
-    // Initial grid and hub draw
+    // Draw initial grid and hub
     this.drawVisibleGrid();
     this.drawCenterSquare();
 
-    // Mouse wheel for camera zoom in/out
+    // --- Listen for tool selection from UIScene ---
+    // UIScene emits "toolChanged" when a tool is selected in the menu.
+    this.scene.get("UIScene").events.on("toolChanged", (toolKey: string) => {
+      this.currentTool = toolKey;
+      // Optionally log: console.log("Current tool set to:", toolKey);
+    });
+
+    // --- Mouse wheel for camera zoom in/out ---
     this.input.on(
-  "wheel",
-  (
-    _pointer: Phaser.Input.Pointer,
-    _gameObjects: any[],
-    _deltaX: number,
-    deltaY: number,
-    _deltaZ: number
-  ) => {
-    let camera = this.cameras.main;
-    let newZoom = camera.zoom;
-    if (deltaY > 0) {
-      newZoom = Phaser.Math.Clamp(
-        camera.zoom - ZoomConfig.zoomStep,
-        ZoomConfig.minZoom,
-        ZoomConfig.maxZoom
-      );
-    } else if (deltaY < 0) {
-      newZoom = Phaser.Math.Clamp(
-        camera.zoom + ZoomConfig.zoomStep,
-        ZoomConfig.minZoom,
-        ZoomConfig.maxZoom
-      );
-    }
-    camera.setZoom(newZoom);
-    this.drawVisibleGrid();
-  }
-);
+      "wheel",
+      (
+        _pointer: Phaser.Input.Pointer,
+        _gameObjects: any[],
+        _deltaX: number,
+        deltaY: number,
+        _deltaZ: number
+      ) => {
+        let camera = this.cameras.main;
+        let newZoom = camera.zoom;
+        if (deltaY > 0) {
+          // Zoom out
+          newZoom = Phaser.Math.Clamp(
+            camera.zoom - ZoomConfig.zoomStep,
+            ZoomConfig.minZoom,
+            ZoomConfig.maxZoom
+          );
+        } else if (deltaY < 0) {
+          // Zoom in
+          newZoom = Phaser.Math.Clamp(
+            camera.zoom + ZoomConfig.zoomStep,
+            ZoomConfig.minZoom,
+            ZoomConfig.maxZoom
+          );
+        }
+        camera.setZoom(newZoom);
+        this.drawVisibleGrid();
+      }
+    );
 
-
-    // Mouse click to place a Splitter (grid-snapped)
+    // --- Mouse click: place an entity/tool based on menu selection ---
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       const cam = this.cameras.main;
-      // Convert mouse click to world (game) coordinates
       const worldPoint = cam.getWorldPoint(pointer.x, pointer.y);
-      // Snap to the nearest grid cell
       const snappedX = Math.round(worldPoint.x / this.gridSize) * this.gridSize;
       const snappedY = Math.round(worldPoint.y / this.gridSize) * this.gridSize;
 
-      // Deselect all splitters
-      for (const s of this.splitters) s.deselect();
+      // For now, only allow Splitter placement for example
+      if (this.currentTool === "splitter") {
+        // Deselect all other splitters first
+        for (const s of this.splitters) s.selected = false;
 
-      // Create new splitter, select it, and add to array
-      const splitter = new Splitter(snappedX, snappedY, this.gridSize * 1.25);
-      splitter.select();
-      this.splitters.push(splitter);
+        // Add new splitter and select it
+        const splitter = new Splitter(snappedX, snappedY, this.gridSize * 1.25, 0xffd166);
+        splitter.selected = true;
+        this.splitters.push(splitter);
 
-      // Redraw hub and splitters
-      this.drawCenterSquare();
+        this.drawCenterSquare();
+      }
+
+      // TODO: Add placement logic for other tool types!
     });
   }
 
   /**
-   * Phaser main loop. Handles camera movement, re-centering, and redraws as needed.
+   * Phaser update loop: called every frame.
    */
   update() {
     const cam = this.cameras.main;
     let moved = false;
 
-    // Use acceleration if 'accelerate' key is held down
+    // Accelerated movement (hold "accelerate" key)
     const accelMultiplier = (this.keys.accelerate && this.keys.accelerate.isDown) ? 4 : 1;
     const moveSpeed = this.cameraSpeed * accelMultiplier;
 
@@ -135,23 +146,23 @@ export default class PlayScene extends Phaser.Scene {
       moved = true;
     }
 
-    // Recenter camera if 'recenter' key is pressed (e.g., HOME)
+    // Recenter camera with the recenter key (e.g., HOME)
     if (Phaser.Input.Keyboard.JustDown(this.keys.recenter)) {
       cam.centerOn(0, 0);
       moved = true;
     }
 
-    // Only redraw the grid if the camera moved (saves performance)
+    // Redraw grid if camera moved
     if (moved) {
       this.drawVisibleGrid();
     }
 
-    // Always redraw hub and splitters for highlighting and animation
+    // Always redraw hub and splitters
     this.drawCenterSquare();
   }
 
   /**
-   * Draws the visible portion of the grid, expanding beyond view for seamless scrolling/zoom.
+   * Draw the visible grid around the camera viewport.
    */
   private drawVisibleGrid() {
     this.gridGraphics.clear();
@@ -160,7 +171,7 @@ export default class PlayScene extends Phaser.Scene {
     this.gridGraphics.lineStyle(
       GridConfig.gridLineThickness,
       GridConfig.gridLineColor,
-      0.25 // Subtle transparency for grid
+      0.25
     );
 
     const cam = this.cameras.main;
@@ -169,7 +180,8 @@ export default class PlayScene extends Phaser.Scene {
     const viewRight = cam.scrollX + cam.width / zoom;
     const viewTop = cam.scrollY;
     const viewBottom = cam.scrollY + cam.height / zoom;
-    // Add some extra rows/columns beyond view for smoother scrolling
+
+    // Expand grid beyond the screen for smooth scrolling
     const bufferCellsX = Math.ceil(cam.width / (zoom * this.gridSize));
     const bufferCellsY = Math.ceil(cam.height / (zoom * this.gridSize));
     const left = Math.floor(viewLeft / this.gridSize) - bufferCellsX;
@@ -177,13 +189,13 @@ export default class PlayScene extends Phaser.Scene {
     const top = Math.floor(viewTop / this.gridSize) - bufferCellsY;
     const bottom = Math.ceil(viewBottom / this.gridSize) + bufferCellsY;
 
-    // Draw vertical grid lines
+    // Draw vertical lines
     for (let x = left; x <= right; x++) {
       const px = x * this.gridSize;
       this.gridGraphics.moveTo(px, top * this.gridSize);
       this.gridGraphics.lineTo(px, bottom * this.gridSize);
     }
-    // Draw horizontal grid lines
+    // Draw horizontal lines
     for (let y = top; y <= bottom; y++) {
       const py = y * this.gridSize;
       this.gridGraphics.moveTo(left * this.gridSize, py);
@@ -193,14 +205,11 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   /**
-   * Draws the central hub and all Splitter entities.
+   * Draws the animated hub and all placed splitters.
    */
   private drawCenterSquare() {
     this.centerSquare.clear();
-    // Draw the animated central hub (use your custom function)
     drawFancyHub(this.centerSquare, 0, 0, this.time.now);
-
-    // Draw each splitter in the scene
     for (const s of this.splitters) {
       s.draw(this.centerSquare);
     }
