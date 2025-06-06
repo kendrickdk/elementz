@@ -4,20 +4,18 @@ import { GridConfig, CameraConfig, ZoomConfig } from "../constants/config";
 import { drawFancyHub } from "../gameobjects/FancyHub";
 import { drawSplitter } from "../gameobjects/Splitter";
 
-// Utility for keycodes, handles special keys
+// Utility for keycodes, handles both upper/lowercase safely
 function getKeyCode(key: string) {
   const upperKey = key.toUpperCase() as keyof typeof Phaser.Input.Keyboard.KeyCodes;
   const lowerKey = key as keyof typeof Phaser.Input.Keyboard.KeyCodes;
-  // Try uppercase first, then lowercase
   return Phaser.Input.Keyboard.KeyCodes[upperKey] || Phaser.Input.Keyboard.KeyCodes[lowerKey];
 }
 
-
 export default class PlayScene extends Phaser.Scene {
-  private gridGraphics!: Phaser.GameObjects.Graphics;    // For drawing grid lines
-  private centerSquare!: Phaser.GameObjects.Graphics;    // For hub and splitters
+  private gridGraphics!: Phaser.GameObjects.Graphics;    // Draws grid lines
+  private centerSquare!: Phaser.GameObjects.Graphics;    // Draws hub & splitters
 
-  // List of all placed splitters
+  // List of all splitters placed in the world
   private splitters: { x: number, y: number, size: number, color?: number, selected?: boolean }[] = [];
 
   private keys!: { [key: string]: Phaser.Input.Keyboard.Key };
@@ -28,15 +26,24 @@ export default class PlayScene extends Phaser.Scene {
   private centerHubRadius = GridConfig.centerHubRadius;
   private cameraSpeed = CameraConfig.moveSpeed;
 
+  // Active tool from the menu bar (defaults to "qtube")
+  private activeTool: string = "qtube";
+
+  constructor() {
+    super("PlayScene"); // <-- Register scene with this key!
+    console.log("PlayScene constructor!");
+  }
+
   create() {
-    // Center camera on (0, 0)
+    console.log("PlayScene create running!");
+    // Center camera at the origin
     this.cameras.main.centerOn(0, 0);
 
-    // Set up graphics objects for grid and hub
+    // Set up graphics for grid and hub
     this.gridGraphics = this.add.graphics();
     this.centerSquare = this.add.graphics();
 
-    // Set up key bindings (E/D/S/F or arrows, accelerate, recenter)
+    // Set up key bindings (E/D/S/F or arrow keys, accelerate, recenter)
     this.keys = this.input.keyboard!.addKeys({
       up: getKeyCode(InputKeys.up),
       down: getKeyCode(InputKeys.down),
@@ -47,11 +54,14 @@ export default class PlayScene extends Phaser.Scene {
     }) as any;
     this.cursors = this.input.keyboard!.createCursorKeys();
 
-    // Draw grid and hub for the first time
+    // Draw the initial grid and hub
     this.drawVisibleGrid();
     this.drawCenterSquare();
 
-    // Mouse wheel zoom support (only using deltaY; type parameters to avoid TS warnings)
+    // Listen for tool selections from MenuBarScene
+    this.events.on("tool-selected", this.handleToolSelected, this);
+
+    // Handle mouse wheel zoom (only deltaY matters)
     this.input.on(
       "wheel",
       (
@@ -81,10 +91,13 @@ export default class PlayScene extends Phaser.Scene {
       }
     );
 
-    // Add splitters on mouse click (snap to grid)
+    // Handle mouse clicks for placing splitters (only with correct tool selected)
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Only allow placing splitters if "qtube" is selected
+      if (this.activeTool !== "qtube") return;
+
       const cam = this.cameras.main;
-      // Convert screen coords to world coords
+      // Convert screen (pointer) coordinates to world (game) coordinates
       const worldPoint = cam.getWorldPoint(pointer.x, pointer.y);
       // Snap to grid
       const snappedX = Math.round(worldPoint.x / this.gridSize) * this.gridSize;
@@ -92,7 +105,7 @@ export default class PlayScene extends Phaser.Scene {
 
       // Deselect all existing splitters
       for (const s of this.splitters) s.selected = false;
-      // Add new splitter (selected)
+      // Add new splitter (highlighted)
       this.splitters.push({
         x: snappedX,
         y: snappedY,
@@ -103,6 +116,19 @@ export default class PlayScene extends Phaser.Scene {
 
       this.drawCenterSquare(); // Redraw hub and splitters
     });
+    this.scene.launch("MenuBarScene");
+    this.scene.bringToTop("MenuBarScene");
+
+  }
+
+  /**
+   * Handler for tool selection from MenuBarScene.
+   * @param key The tool key selected (e.g., "qtube", "combine", etc.)
+   */
+  handleToolSelected(key: string) {
+    this.activeTool = key;
+    console.log("Active tool is now:", key);
+    // (Optional) visually indicate selected tool in game
   }
 
   update() {
@@ -154,7 +180,7 @@ export default class PlayScene extends Phaser.Scene {
     this.gridGraphics.lineStyle(
       GridConfig.gridLineThickness,
       GridConfig.gridLineColor,
-      0.25 // Grid alpha
+      0.25 // Grid alpha (opacity)
     );
 
     const cam = this.cameras.main;
@@ -210,3 +236,4 @@ export default class PlayScene extends Phaser.Scene {
     }
   }
 }
+
