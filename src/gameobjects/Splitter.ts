@@ -1,31 +1,24 @@
-// src/gameobjects/Splitter.ts
-
 import Phaser from "phaser";
 
 /**
- * Draws a simple Shapez-style splitter at (x, y) on the given graphics object.
+ * Draws a splitter centered at (0, 0) on the given graphics object.
+ * Does NOT handle positioning or rotation — caller handles that.
  */
 export function drawSplitter(
   graphics: Phaser.GameObjects.Graphics,
-  x: number,
-  y: number,
   size: number,
   options?: { color?: number; highlight?: boolean }
 ) {
   const c = options?.color || 0xcccccc;
-  // Main body
+
   graphics.lineStyle(3, 0x555555, 1);
   graphics.fillStyle(c, 1);
-  graphics.fillRoundedRect(x - size / 2, y - size / 2, size, size, 12);
+  graphics.fillRoundedRect(-size / 2, -size / 2, size, size, 12);
 
-  // Input line
-  graphics.lineBetween(x, y - size / 2, x, y - size * 0.85);
+  graphics.lineBetween(0, -size / 2, 0, -size * 0.85);
+  graphics.lineBetween(-size / 3, size / 2, -size / 3, size * 0.85);
+  graphics.lineBetween(size / 3, size / 2, size / 3, size * 0.85);
 
-  // Output lines (split)
-  graphics.lineBetween(x - size / 3, y + size / 2, x - size / 3, y + size * 0.85);
-  graphics.lineBetween(x + size / 3, y + size / 2, x + size / 3, y + size * 0.85);
-
-  // Center circle (indicator)
   graphics.fillStyle(0xffffff, 1);
-  graphics.fillCircle(x, y, size * 0.18);
+  graphics.fillCircle(0, 0, size * 0.18);
 }
